@@ -89,12 +89,21 @@ async fn process(
     lines.send("Please enter your username:").await?;
     // Read the first line from the `LineCodec` stream to get the username.
     let username = match lines.next().await {
-        Some(Ok(line)) => line,
+        Some(Ok(line)) => {
+            if line.is_empty() {
+                let msg = format!("Are you serious?, username is required :), bye bye!!.");
+                tracing::error!("Invalid username from {} Client disconnected.", addr);
+                lines.send(msg).await?;
+                return Ok(());
+            }
+            line
+        }
         _ => {
             tracing::error!("Failed to get username from {}. Client disconnected.", addr);
             return Ok(());
         }
     };
+
     // Register our peer with state which inernally sets some channels
     let mut peer = Peer::new(state.clone(), lines).await?;
     // A client has connected, notify other clients
