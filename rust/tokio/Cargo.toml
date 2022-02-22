@@ -5,3 +5,10 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.17.0", features = ["full"]  }
+
+# See ./src/bin/chat_advance.rs
+tokio-stream = { version = "0.1.8" }
+tokio-util = { version = "0.7.0", features = ["codec"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.2" }
+futures = "0.3.21"
