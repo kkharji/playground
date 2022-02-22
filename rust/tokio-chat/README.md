@@ -1,41 +1,82 @@
 # Creating a chat server with async Rust and Tokio
 
-[Source - YouTube]
+Notes I manged to write from watching [Lily Mara stream].
 
-- Asynchronous non-blocking code
-- Allows multiple TCP client to connect.
+## Syntax and Types
 
-## Async Main function
-
-In rust, writing `async` in front of `fn` makes the function asynchronous.
-However, as of now, rust can't have main function as async. It would raise an error
-like: `main` function is not allowed to be `async`, or expected value, found
-trait `future::Future`.
-
-## `std::future::Future`
-
+### `std::future::Future`
 a `Future` is a thing that doesn't have a known value yet (at least until competition is done).
 According to rust-docs, it represents an asynchronous computation. An
 asynchronous value, that makes it possible for a thread to continue doing
 useful work while it waits for the value to become available.
 
-## `await` keyword
-
+### `await` keyword
 Tells the compile to suspend the function until their is a value?. Though it
 only blocks on thread level, not on task level.
 
 Task is a unit of work in async work.
 
+### `tokio::BufReader`
+`tokio::BufReader` is helpful type for doing io operations. It job is to wrap
+any type of reader, and it enable multiple read operations. like read entire
+line.
+
+For example:  Echo server with and without `tokio::BufReader`
+
+```rust
+// Setup Tcp Listener and accept connections: ----------------
+let listener = TcpListener::bind("localhost:8080").await.unwrap();
+
+// without [`tokio::BufReader`]
+let (mut cstream, _addr) = listener.accept().await.unwrap();
+let mut buffer = [0u8; 1024];
+let bytes_read = stream.read(&mut buffer).await.unwrap();
+stream.write_all(&buffer[..bytes_read]).await.unwrap();
+
+// without [`tokio::BufReader`]
+let (reader, mut writer) = cstream.split();
+let mut breader = BufReader::new(reader);
+let mut line = String::new();
+let _ = breader.read_line(&mut line).await.unwrap();
+writer.write_all(&line.as_bytes()).await.unwrap();
+
+```
+
+### `#[tokio::main]`
+In rust, writing `async` in front of `fn` makes the function asynchronous.
+However, as of now, rust can't have main function as async. It would raise an error
+like: `main` function is not allowed to be `async`, or expected value, found
+trait `future::Future`.
+
+To fix this we need to annotate main function with `#[tokio::main]`
+
+### `tokio::spawn`
+
+`tokio::spawn` spawns a new asynchronous task and return [`JoinHandle`].
+
+Spawning a task enables the task to execute concurrently to other tasks that
+can be execute on the same thread or on other thread. The specifics depend on
+the current [`Runtime`].
+
+## `tokio::select!` vs `tokio::spawn`
+`tokio::select` is when you need something to operate on the same state and you have finite.
+`tokio::spawn` when you don't need to share reference to  a variable
+
+
+## `tokio::select`
+Macro that run async function at the same time. It implicitly run await on functions needs awaiting
+
+
+# Snippets
 
 ## TCP Echo Server
-
 Echo server is a server that wait for a client to connect, once the client
 connects, it will take any message the client sent and send it back to the
 client.
 
 ```rust
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpListener};
-\#[tokio::main]
+#[tokio::main]
 async fn main() {
     // Setup Tcp Listener and accept connections: ----------------
     let listener = TcpListener::bind("localhost:8080").await.unwrap();
@@ -57,7 +98,7 @@ async fn main() {
 }
 ```
 
-### Support multiple read and write
+### Fix: multiple read and write
 
 As soon as the client connect, we need to drop to an infinit loop that will read then write data.
 
@@ -68,14 +109,10 @@ loop {
 }
 ```
 
-## `tokio::BufReader`
-
-`tokio::BufReader` is helpful type for doing io operations. It job is to wrap
-any type of reader, and it enable muliple read operations. like read entire
-line.
+### with `tokio::BufReader`
 
 ```rust
-\#[tokio::main]
+#[tokio::main]
 async fn main() {
     // Setup Tcp Listener and accept connections: ----------------
     let listener = TcpListener::bind("::1:8080").await.unwrap();
@@ -111,28 +148,10 @@ async fn main() {
 }
 ```
 
-## Support multiple clients
+### with multiple clients
 
-### `tokio::task::spawn` or `tokio::spawn`
-
-`tokio::spawn` spawns a new asynchronous task and return [`JoinHandle`].
-
-Spawning a task enables the task to execute concurrently to other tasks that
-can be execute on the same thread or on other thread. The specifics depend on
-the current [`Runtime`].
-
-### Async blocks
-
-Unlike many language, rust support async blocks which can be thought of as isolate async task.
-
-### All together
 ```rust
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::TcpListener,
-};
-
-\#[tokio::main]
+#[tokio::main]
 async fn main() {
     // Setup Tcp Listener and accept connections: ----------------
     let listener = TcpListener::bind("::1:8080").await.unwrap();
@@ -155,10 +174,6 @@ To allow clients to exchange messages, we need to have some types of broadcast
 mechanism. `tokio` provide `broadcast` type as it allows multiple producesser and
 multiple consumers to send and receive on a single channel.
 
-## `tokio::select`
-Macro that run async function at the same time. It implicitly run await on functions needs awaiting
-
-## All Togther
 ```rust
 use std::net::SocketAddr;
 use tokio::{
@@ -167,7 +182,7 @@ use tokio::{
     sync::broadcast,
 };
 
-\#[tokio::main]
+#[tokio::main]
 async fn main() {
     // Setup Tcp Listener and accept connections: ----------------
     let listener = TcpListener::bind("::1:8080").await.unwrap();
@@ -218,9 +233,4 @@ async fn main() {
 }
 ```
 
-## `tokio::select!` vs `tokio::spawn`
-`tokio::select` is when you need something to operate on the same state and you have finite.
-`tokio::spawn` when you don't need to share reference to  a variable
-
-
-[Source - YouTube]: https://www.youtube.com/watch?v=4DqP57BHaXI
+[Lily Mara stream]: https://www.youtube.com/watch?v=4DqP57BHaXI
