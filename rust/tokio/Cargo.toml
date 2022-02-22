@@ -1,5 +1,5 @@
 [package]
-name = "tokio-chat"
+name = "tokio"
 version = "0.1.0"
 edition = "2021"
 
