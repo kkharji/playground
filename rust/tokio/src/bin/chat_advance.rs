@@ -43,22 +43,26 @@ impl State {
 
     /// Sends a `LinesCodec` encoded message to every peer, expect for the sender
     /// Whenever a it is called, it iterates over the `peers` and send a copy of the message
-    async fn broadcast(&mut self, sender: SocketAddr, message: &str) {
-        self.peers.iter_mut().for_each(|(addr, tx)| {
+    async fn broadcast(&mut self, sender: SocketAddr, message: &str) -> Result<(), &str> {
+        if self.peers.len() == 1 {
+            let msg = "Server: Only one user currently in the channel.";
+            tracing::info!("{msg}");
+            return Err(msg);
+        }
+        for (addr, tx) in self.peers.iter_mut() {
             if *addr != sender {
                 tx.send(message.into()).ok();
             }
-        })
+        }
+        Ok(())
     }
 }
 
 /// The state for each connected client.
 struct Peer {
-    /// The TCP socket wrapped with the `Lines` codec.
-    ///
-    /// This handles sending and receiving data on the socket. When using
-    /// `Lines`, we can work at the line level instead of having to manage the
-    /// raw byte operations.
+    /// Wrapper with the `Lines` codec. This handles sending and receiving data on the socket. When
+    /// using `Lines`, we can work at the line level instead of having to manage the raw byte
+    /// operations.
     lines: Framed<TcpStream, LinesCodec>,
 
     /// Receive half of the message channel. used to receive messages from peers.
@@ -81,10 +85,8 @@ async fn process(
     addr: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
     let mut lines = Framed::new(stream, LinesCodec::new());
-
     // Prompt client to enter value.
     lines.send("Please enter your username:").await?;
-
     // Read the first line from the `LineCodec` stream to get the username.
     let username = match lines.next().await {
         Some(Ok(line)) => line,
@@ -93,17 +95,14 @@ async fn process(
             return Ok(());
         }
     };
-
     // Register our peer with state which inernally sets some channels
     let mut peer = Peer::new(state.clone(), lines).await?;
-
     // A client has connected, notify other clients
     {
         let msg = format!("{username}: joined");
         tracing::info!("{msg}");
-        state.lock().await.broadcast(addr, &msg).await;
+        state.lock().await.broadcast(addr, &msg).await.ok();
     }
-
     // Process incoming messages until our stream is exhausted by a disconnected
     loop {
         select! {
@@ -111,7 +110,12 @@ async fn process(
             Some(msg) = peer.rx.recv() => peer.lines.send(&msg).await?,
             result = peer.lines.next() => match result {
                 // A message was received from the current user, we should brodcast
-                Some(Ok(msg)) => state.lock().await.broadcast(addr, &format!("{username}: {msg}")).await,
+                Some(Ok(msg)) => {
+                    let mut state = state.lock().await;
+                    if let Err(msg) = state.broadcast(addr, &format!("{username}: {msg}")).await {
+                        peer.lines.send(&msg).await?;
+                    }
+                },
                 // An Error occurred
                 Some(Err(err)) => tracing::error!("{}: Error while processing messages; {:?}", username, err),
                 // No more messages
@@ -119,15 +123,13 @@ async fn process(
             }
         }
     }
-
-    // If this section is reached it mean that the client was disconnected!
-    // Notify everyone
+    // client was disconnected! Notify everyone
     {
         let mut state = state.lock().await;
         state.peers.remove(&addr);
         let msg = format!("{username} has left the chat");
         tracing::info!("{msg}");
-        state.broadcast(addr, &msg).await;
+        state.broadcast(addr, &msg).await.ok();
     }
 
     Ok(())
