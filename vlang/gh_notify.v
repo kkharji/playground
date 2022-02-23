@@ -3,7 +3,7 @@ module main
 import os
 import net.http
 import json
-import time { now, sleep_ms }
+import time { now, sleep, Duration }
 import vendor.configparser as cp // dependency
 import lib.daemon as d // dependency
 
@@ -87,13 +87,15 @@ fn config() (string, int, int, int) {
 
 fn fetch(token string) []ResItem {
 	req := http.FetchConfig{
+    url: github_api,
 		method: .get
-		headers: {
-			'Authorization': 'token $token'
-		}
+		header: http.new_header(http.HeaderConfig {
+      key: http.CommonHeader.authorization,
+      value:'token $token',
+		})
 	}
 
-	res := http.fetch(github_api, req) or { panic(err) }
+	res := http.fetch(req) or { panic(err) }
 	items := json.decode([]ResItem, res.text) or { panic("couldn't parse") }
 
 	return items
@@ -128,14 +130,16 @@ fn notify(mut cache map[string]string, items []ResItem, popup_timeout int) {
 fn launch_service() {
 	mut cache := map[string]string{}
 	token, every, sleep, notify_timeout := config()
+  timeout := Duration(sleep * 1000)
 	for {
 		if now().minute % every == 0 {
 			items := fetch(token)
 			notify(mut cache, items, notify_timeout)
 		}
-		sleep_ms(sleep * 1000)
+		sleep(timeout)
 	}
-	sleep_ms(sleep * 1000)
+  sleep(timeout)
+
 }
 
 fn main() {

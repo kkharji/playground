@@ -18,7 +18,7 @@ pub:
 
 fn C.setsid() int
 
-fn C.umask() int
+fn C.umask(mod int) int
 
 fn C.texit() voidptr
 
@@ -29,16 +29,18 @@ fn (daemon Daemon) daemonize() {
 	if pid > 0 {
 		exit(0)
 	}
+
 	// decouple for parent environment
-	os.chdir('/')
+	os.chdir('/') or { panic('Nothing') }
 	C.setsid()
 	C.umask(0)
 
-	// do second fork 
+	// do second fork
 	pid = os.fork()
 	if pid > 0 {
 		exit(0)
 	}
+
 	// redirect standard file descriptors
 	C.fflush(C.stdout)
 	C.fflush(C.stderr)
@@ -54,13 +56,13 @@ fn (daemon Daemon) daemonize() {
 	pid = os.getpid()
 	mut f := os.open_file(daemon.pidpath, 'w+') or { panic(err) }
 	defer {
-		f.write_str('$pid.str()\n') or { panic(err) }
+		f.write_string('$pid.str()\n') or { panic(err) }
 		f.close()
 	}
 }
 
 fn (daemon Daemon) getpid() int {
-	pid := read_file(daemon.pidpath) or { '0' }
+	pid := os.read_file(daemon.pidpath) or { '0' }
 	return pid.int()
 }
 
@@ -81,13 +83,13 @@ pub fn (daemon Daemon) start() {
 pub fn (daemon Daemon) stop() {
 	pid := daemon.getpid()
 	if pid == 0 {
-		eprintln("pidfile $daemon.pidpath doesn\'t exist. Daemon not running?")
+		eprintln('pidfile $daemon.pidpath doesn\'t exist. Daemon not running?')
 		exit(1)
 	}
-	os.rm(daemon.pidpath) or { }
+	os.rm(daemon.pidpath) or {}
 	for {
 		C.kill(pid, 15)
-		time.sleep_ms(1 * 1000)
+		time.sleep(time.second)
 		exit(0)
 	}
 }
