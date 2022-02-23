@@ -3,8 +3,8 @@ module main
 import os
 import net.http
 import json
-import time { now, sleep, Duration }
-import vendor.configparser as cp // dependency
+import time { Duration, now, sleep }
+import lib.configparser as cp // dependency
 import lib.daemon as d // dependency
 
 /*
@@ -33,7 +33,7 @@ const (
 	configpath = '$os.home_dir()/.config/github-notify.conf'
 	github_api = 'https://api.github.com/notifications'
 	icons      = {
-   'PullRequest': '🔥'
+		'PullRequest': '🔥'
 		'Issue':       '📝'
 	}
 )
@@ -87,11 +87,11 @@ fn config() (string, int, int, int) {
 
 fn fetch(token string) []ResItem {
 	req := http.FetchConfig{
-    url: github_api,
+		url: github_api
 		method: .get
-		header: http.new_header(http.HeaderConfig {
-      key: http.CommonHeader.authorization,
-      value:'token $token',
+		header: http.new_header(http.HeaderConfig{
+			key: http.CommonHeader.authorization
+			value: 'token $token'
 		})
 	}
 
@@ -130,7 +130,7 @@ fn notify(mut cache map[string]string, items []ResItem, popup_timeout int) {
 fn launch_service() {
 	mut cache := map[string]string{}
 	token, every, sleep, notify_timeout := config()
-  timeout := Duration(sleep * 1000)
+	timeout := Duration(sleep * 1000)
 	for {
 		if now().minute % every == 0 {
 			items := fetch(token)
@@ -138,8 +138,7 @@ fn launch_service() {
 		}
 		sleep(timeout)
 	}
-  sleep(timeout)
-
+	sleep(timeout)
 }
 
 fn main() {
