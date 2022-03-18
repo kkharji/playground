@@ -1,0 +1,13 @@
+[package]
+name = "neomovies"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+neo4rs = "0.5.9"
+tokio = { version = "1.17.0", features = ["full"]  }
+eyre = "0.6.7"
+uuid = { version = "1.0.0-alpha.1", features = [ "v4", "fast-rng" ]  }
+async-trait = "0.1.52"
