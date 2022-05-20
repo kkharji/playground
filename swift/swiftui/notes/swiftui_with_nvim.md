@@ -275,6 +275,7 @@ development experience fast and straightforward.
 - Display build/running status in statusline.
 - Command Picker
 - Standalone watch process / socket to receive request for all nvim editors
+- Strip .swift from names and relay on icons in bufferline and telescope picker
 
 [vscode-SDE]: https://github.com/vknabel/vscode-swift-development-environment#using-sourcekit-lsp
 [vscode-swift]: https://github.com/swift-server/vscode-swift
