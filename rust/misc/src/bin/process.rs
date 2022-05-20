@@ -1,7 +1,7 @@
 //! Helper type for processing process output and exit status in non-blocking way
 use crossbeam_channel::{unbounded, Receiver, SendError, Sender};
 use std::io::{self, prelude::*, BufReader};
-use std::process::{Child, ExitStatus};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
@@ -25,13 +25,17 @@ pub struct Process {
 
 impl Process {
     /// Create new process from [`Child`]
-    pub fn new(mut process: Child) -> Process {
-        let (tx, rx) = unbounded();
-        let (mtx, mrx) = unbounded();
+    pub fn new(command: &mut Command) -> io::Result<Process> {
+        let ((tx, rx), (mtx, mrx)) = (unbounded(), unbounded());
+
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        command.stdin(Stdio::null());
+
+        let mut process = command.spawn()?;
 
         let stdout = process.stdout.take().unwrap();
         let stderr = process.stderr.take().unwrap();
-
         let inner = Arc::new(Mutex::new(process));
 
         let handlers = ProcessHandlers {
@@ -40,12 +44,12 @@ impl Process {
             status: spawn_status_thread(inner.clone(), tx.clone(), mrx.clone(), mtx.clone()),
         };
 
-        Process {
+        Ok(Process {
             inner,
             rx,
             mtx,
             handlers,
-        }
+        })
     }
 
     /// Get iteratorable stream of outputs
@@ -120,6 +124,17 @@ pub enum Output {
     Exit(Result<Option<i32>, io::Error>),
 }
 
+impl std::fmt::Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Output::Out(msg) => msg.fmt(f),
+            Output::Err(msg) => write!(f, "[Error] {msg}"),
+            Output::Exit(Ok(Some(code))) => code.fmt(f),
+            _ => Ok(()),
+        }
+    }
+}
+
 fn spawn_reader<R: Read + Send + 'static>(
     is_stdout: bool,
     out: R,
@@ -183,3 +198,19 @@ fn spawn_status_thread(
     })
 }
 
+fn main() {
+    let mut process = Process::new(
+        Command::new("xcrun")
+            .arg("simctl")
+            .arg("launch")
+            .arg("--terminate-running-process")
+            .arg("--console")
+            .arg("booted")
+            .arg("tami5.Wordle"),
+    )
+    .unwrap();
+
+    for output in process.stream() {
+        println!("{output}")
+    }
+}
